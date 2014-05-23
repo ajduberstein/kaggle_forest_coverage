@@ -1,0 +1,61 @@
+Separating the (Random) Forests from the (Decision) Trees: Getting Perspective on Modeling
+==========================
+## A Case Study Via [Kaggle](http://www.kaggle.com)
+
+**Goal:** *"Use cartographic variables to classify forest categories"* These will be real forests (like the deciduous kind).
+
+## 1. [First, figure out what you're doing.](http://www.r-bloggers.com/my-intro-to-multiple-classification-with-random-forests-conditional-inference-trees-and-linear-discriminant-analysis/)
+Find your R package and some relevant guiding materials. It looks like random forests (perhaps a *conditional inference tree*) is what we're trying to use.
+
+## 2. Split into test/train.
+The R package `caret` is particularly useful for this.
+
+```{r}
+A=read.csv('train.csv')
+A$Cover_Type = factor(A$Cover_Type)
+library('caret')
+library('randomForest')
+set.seed(998)
+```
+We divide up the test and train data sets using its `createDataPartition` method&#8212;we take 75% of the data and identify our response variable (`Cover_Type`).
+```{r}
+inTraining = createDataPartition(p=.75,y=A$Cover_Type,list=F)
+training = A[inTraining, ]
+testing = A[-inTraining, ]
+```
+To run a random forest on all variables except the ID, do the following:
+```{r}
+pred = subset(training,select=-c(Id))
+coverage.model.rf = randomForest(pred$Cover_Type ~ ., data=pred)
+```
+Tuning a random forest takes time, so don't be surprised when the code runs for a bit.
+
+How about a diagnostic plot?
+
+```{r}
+varImpPlot(coverage.model.rf)
+```
+We can see that elevation is the strongest predictor, followed by the horizontal distance metrics.
+
+Next, we can gauge the model's accuracy:
+```{r}
+testing$pred.coverage.rf = predict(coverage.model.rf, subset(testing, select=-c(Cover_Type,Id)))
+out = testing$Cover_Type == testing$pred.coverage.rf
+testing$pred.coverage.rf = predict(coverage.model.rf, subset(testing, select=-c(Cover_Type,Id)))
+out = testing$Cover_Type == testing$pred.coverage.rf
+cat('Random forest model accuracy:','\n',sum(out)/length(out)*100,'%')
+```
+A respectable 82% accuracy, which is certainly better than a means model.
+
+Let's implement one more model as a benchmark, like a conditional inference tree:
+```{r}
+#Erase the previous result set
+testing$pred.coverage.rf = NULL
+library(party)
+coverage.model.ctree = ctree(pred$Cover_Type ~ ., data=pred)
+testing$pred.coverage.ctree = predict(coverage.model.ctree, subset(testing, select=-c(Cover_Type,Id)))
+out = testing$Cover_Type == testing$pred.coverage.ctree
+cat('Conditional tree model accuracy:','\n',sum(out)/length(out)*100,'%')
+```
+
+There we have it: The random forest better predicts forest coverage.
